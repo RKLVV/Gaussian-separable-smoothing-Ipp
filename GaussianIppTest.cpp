@@ -171,19 +171,18 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	///3.***************************************************************************************************************************************************
 	// setup Ipp stuff
-	IppiSize roiSize = { w, h };
-	int srcStep = w;// *sizeof(Ipp16u);
-	int dstStep = w;// *sizeof(Ipp16u);
+	IppiSize roiSize1 = { w, h-kernSize-1 };
+	IppiSize roiSize2 = { w-kernSize-1, h};
+	int srcStep = w*sizeof(Ipp16u);
+	int dstStep = w*sizeof(Ipp16u);
 	IppStatus result;
 
-	Ipp32f Ker1[] = { 1, 2, 1 };
-
 	cout << endl << "Column Conv start... " << endl;
-	result = ippiFilterColumn32f_16u_C1R((const Ipp16u*)src, srcStep, (Ipp16u*)dst, dstStep, roiSize, ker1D, kernSize, 1);
+	result = ippiFilterColumn32f_16u_C1R((const Ipp16u*)src, srcStep, (Ipp16u*)dst, dstStep, roiSize1, ker1D, kernSize, kernSize-1);
 	cout << endl << "Result: " << result << endl;
 
 	cout << endl << "Row Conv start... " << endl;
-	result = ippiFilterRow32f_16u_C1R((const Ipp16u*)dst, srcStep, (Ipp16u*)dst, dstStep, roiSize, ker1D, kernSize, 2);
+	result = ippiFilterRow32f_16u_C1R((const Ipp16u*)dst, srcStep, (Ipp16u*)dst, dstStep, roiSize2, ker1D, kernSize, kernSize - 1);
 	cout << endl << "Result: " << result << endl;
 	
 	///4.***************************************************************************************************************************************************
