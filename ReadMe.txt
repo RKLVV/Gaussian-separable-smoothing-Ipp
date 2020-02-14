@@ -2,6 +2,11 @@
     CONSOLE APPLICATION : GaussianIppTest Project Overview
 ========================================================================
 
+Usage: 
+    Input file must be named C:\Image\GausInput.raw
+    Output files will be written to C:\Image\TestOuput
+    Commandline: GaussianIppTest.exe <width(int)> <height(int)> <radius(int)> <debug(int)>
+
 AppWizard has created this GaussianIppTest application for you.
 
 This file contains a summary of what you will find in each of the files that
