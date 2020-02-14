@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include <ippi.h>
+#include <ipps.h>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -54,9 +55,9 @@ void testCode()
 }
 
 // Returns Normalized 2D kernel
-void GaussKer1D(Ipp32f* KernArr, int rad)
+void GaussKer1D(Ipp32f* KernArr, float rad, int factor)
 {
-	int size = rad * 5;
+	int size = int(rad * factor);
 	float sum = 0;
 
 	for (int i = -size; i < (size + 1); i++)
@@ -75,7 +76,7 @@ void GaussKer1D(Ipp32f* KernArr, int rad)
 void readRawImage(Ipp16u *src, Ipp16u *dst)
 {
 	// Read image file
-	ifstream myImage("C:\\Image\\image023.raw", ios::binary);
+	ifstream myImage("C:\\Image\\GausInput.raw", ios::binary);
 
 	// Store value into buffer
 	short value;
@@ -85,7 +86,6 @@ void readRawImage(Ipp16u *src, Ipp16u *dst)
 	{
 		memcpy(&value, buf, sizeof(Ipp16u));
 		src[i] = value;
-		dst[i] = 0;
 		i++;
 	}
 
@@ -115,12 +115,12 @@ void dumpKernel(Ipp32f *ker1D, int kernSize)
 }
 
 //Dump image to file
-void dumpImage(Ipp16u *src,int size, string filename)
+void dumpImage(Ipp16u *src, int size, string filename, int offset)
 {
 	ofstream MyFile(filename, ios::out | ios::binary);
-
+	int i = 0;
 	char buf[sizeof(Ipp16u)];
-	for (int i = 0; i < (size); i++)
+	for (i = offset; i < (size-offset); i++)
 	{
 		memcpy(buf, &src[i], sizeof(Ipp16u));
 		MyFile.write((char*)&buf, sizeof(buf));
@@ -140,66 +140,120 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 
 	///1.***************************************************************************************************************************************************
-	// Read radius to generate kernel
-	int rad = std::stoi(argv[3]);
-	int kernSize = (rad * 10) + 1;
-	Ipp32f *ker1D = new Ipp32f[kernSize];
-	GaussKer1D(ker1D, rad);
+	// Init
+	Ipp32f *ker1D;
+	float rad = std::stof(argv[3]);
+	int factor = 5;
+	if (rad > 1.4)
+		factor = 3;
 
-	//Dump Kernel
-	if (debug)
-		dumpKernel(ker1D,kernSize);
+	int kernSize = rad * factor * 2;
+	if (kernSize % 2 == 0)
+		kernSize++;
 
-	///2.***************************************************************************************************************************************************
-	// Read image size
+	IppStatus result;
+
 	int w = std::stoi(argv[1]);
 	int h = std::stoi(argv[2]);
 	int size = w * h;
+	int outSize = (w + kernSize - 1)*(h + kernSize - 1);
 
 	// Allocate buffers for input and output images
-	//Ipp16u *dst = new Ipp16u[size*sizeof(Ipp16u)];
 	Ipp16u *src = (Ipp16u *)malloc(size * sizeof(Ipp16u));
+	Ipp16u *temp = (Ipp16u *)malloc(outSize * sizeof(Ipp16u));
 	Ipp16u *dst = (Ipp16u *)malloc(size * sizeof(Ipp16u));
+	Ipp16u *Hp = (Ipp16u *)malloc(size * sizeof(Ipp16u));
 
+	// ROI for src and dest images
+	IppiSize roiSize1 = { w, h };
+	IppiSize roiSize2 = { w + kernSize - 1, h + kernSize - 1 };
+
+	// Stepsize
+	int srcStep = w*sizeof(Ipp16u);
+	int dstStep = w*sizeof(Ipp16u);
+
+	///2.***************************************************************************************************************************************************
+	// Read image size
 	// read image into src and zero dst
 	cout << endl << "Reading input... " << endl;
 	readRawImage(src,dst);
 
 	//Dump Read Image
-	if (debug)
-		dumpImage(src, size, "C:\\Image\\TestOutput\\InputImg.raw");
+	/*if (debug)
+		dumpImage(src, size, "C:\\Image\\TestOutput\\InputImg.raw",0);*/
 
 	///3.***************************************************************************************************************************************************
-	// setup Ipp stuff
-	IppiSize roiSize1 = { w, h-kernSize-1 };
-	IppiSize roiSize2 = { w-kernSize-1, h};
-	int srcStep = w*sizeof(Ipp16u);
-	int dstStep = w*sizeof(Ipp16u);
-	IppStatus result;
+	// Generate Kernel
+	ker1D = new Ipp32f[kernSize];
+	GaussKer1D(ker1D, rad, factor);
 
-	cout << endl << "Column Conv start... " << endl;
-	result = ippiFilterColumn32f_16u_C1R((const Ipp16u*)src, srcStep, (Ipp16u*)dst, dstStep, roiSize1, ker1D, kernSize, kernSize-1);
+	//Dump Kernel
+	if (debug)
+		dumpKernel(ker1D, kernSize);
+
+	///4.***************************************************************************************************************************************************
+	// Border pixels for Column
+	int topBorderHeight = (kernSize - 1)/2;
+	int leftBorderWidth = (kernSize - 1)/2;
+
+	// Change dst step
+	dstStep = (w + kernSize - 1)*sizeof(Ipp16u);
+
+	cout << endl << "Column Border start... " << endl;
+	
+	result = ippiCopyReplicateBorder_16u_C1R(src, srcStep, roiSize1, temp, dstStep, roiSize2, topBorderHeight, leftBorderWidth);
 	cout << endl << "Result: " << result << endl;
 
+	if (debug)
+		dumpImage(temp, outSize, "C:\\Image\\TestOutput\\BorImg.raw", 0);
+
+	///5.***************************************************************************************************************************************************
+	// Applyfilter
+	// Change ROI
+	roiSize1 = { w+kernSize-1, h };
+	roiSize2 = { w, h+kernSize-1};
+	
+	// Change stepsize
+	srcStep = (w + kernSize - 1)*sizeof(Ipp16u);
+	dstStep = (w + kernSize - 1)*sizeof(Ipp16u);
+	
+	cout << endl << "Column Conv start... " << endl;
+	result = ippiFilterColumn32f_16u_C1R(temp, srcStep, temp, dstStep, roiSize1, ker1D, kernSize, kernSize - 1);
+	cout << endl << "Result: " << result << endl;
+
+	if (debug)
+		dumpImage(temp, outSize, "C:\\Image\\TestOutput\\ColImg.raw", 0);
+
 	cout << endl << "Row Conv start... " << endl;
-	result = ippiFilterRow32f_16u_C1R((const Ipp16u*)dst, srcStep, (Ipp16u*)dst, dstStep, roiSize2, ker1D, kernSize, kernSize - 1);
+	result = ippiFilterRow32f_16u_C1R(temp, srcStep, temp, dstStep, roiSize2, ker1D, kernSize, kernSize - 1);
+	cout << endl << "Result: " << result << endl;
+
+	// Crop image
+	// Change ROI
+	roiSize1 = { w, h };
+
+	// Change stepsize
+	srcStep = (w + kernSize - 1)*sizeof(Ipp16u);
+	dstStep = (w)*sizeof(Ipp16u);
+
+	cout << endl << "Copying to final output: " << endl;
+	result = ippiCopy_16u_C1R(temp,srcStep, dst,dstStep,roiSize1);
+	cout << endl << "Result: " << result << endl;
+
+	// HP image
+	cout << endl << "Computing HP image: " << endl;
+	result = ippsSub_16u_Sfs(src, dst, Hp, size, 1);
 	cout << endl << "Result: " << result << endl;
 	
 	///4.***************************************************************************************************************************************************
 	// Write processed image to output
 	cout << endl << "Writing output... " << endl;
-	//copyBuffer(src,dst,size);
 
-	dumpImage(dst, size, "C:\\Image\\TestOutput\\SmoothImg.raw");
+	dumpImage(src, size, "C:\\Image\\TestOutput\\InputImg.raw", 0);
+	dumpImage(dst, size, "C:\\Image\\TestOutput\\SmoothImg.raw", 0);
+	dumpImage(Hp, size, "C:\\Image\\TestOutput\\HighPass.raw", 0);
 
 	cout << endl << "Done! " << endl;
 
 	return 0;
 }
-
-// Some notes:
-//ippiFilterColumn32f_16u_C1R(src, srcStep, dst, dstStep, roiSize, ker1D, rad * 5, 1);
-//ippiFilterRow32f_16u_C1R(dst, srcStep, dst, dstStep, roiSize, ker1D, rad * 5, 1);
-
-//ippiFilterGauss_16u_C1R(src, w, dst, w, roiSize, ippMskSize5x5);
-//result = ippiFilterRow32f_16u_C1R(dst1, 9, dst1, 9, roiSize1, Ker1, 5, 1);
