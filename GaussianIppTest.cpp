@@ -10,50 +10,6 @@
 
 using namespace std;
 
-void testCode()
-{
-	Ipp16u src1[9 * 9] = {
-		0, 1, 2, 3, 4, 5, 6, 7, 0,
-		1, 2, 3, 4, 5, 6, 7, 0, 1,
-		2, 3, 4, 5, 6, 7, 0, 1, 2,
-		3, 4, 5, 6, 7, 0, 1, 2, 3,
-		4, 5, 6, 7, 0, 1, 2, 3, 4,
-		5, 6, 7, 0, 1, 2, 3, 4, 5,
-		6, 7, 0, 1, 2, 3, 4, 5, 6,
-		7, 0, 1, 2, 3, 4, 5, 6, 7,
-		0, 1, 2, 3, 4, 5, 6, 7, 0
-	};
-
-	ofstream InputFile("C:\\Image\\TestOutput\\InputImg.raw", ios::out | ios::binary);
-
-	char buf[sizeof(Ipp16u)];
-	for (int i = 0; i < (9 * 9); i++)
-	{
-		memcpy(buf, &src1[i], sizeof(Ipp16u));
-		InputFile.write((char*)&buf, sizeof(buf));
-	}
-	InputFile.close();
-
-	Ipp16u dst1[9 * 9];
-	IppiSize roiSize1 = { 9, 9 };
-	Ipp32f Ker1[] = { 1, 2, 1 };
-
-	IppStatus result;
-	//result = ippiFilterGauss_16u_C1R(src1, 9 * sizeof(Ipp16u), dst1, 9 * sizeof(Ipp16u), roiSize1, ippMskSize3x3);
-	result = ippiFilterColumn32f_16u_C1R((Ipp16u*)src1 + 9, 9 * sizeof(Ipp16u), (Ipp16u*)dst1 + 9, 9 * sizeof(Ipp16u), roiSize1, (Ipp32f*)Ker1, 5, 1);
-
-	cout << endl << "Result: " << result << endl;
-
-	// Write processed image to output
-	ofstream binaryFile("C:\\Image\\TestOutput\\SmoothImg.raw", ios::out | ios::binary);
-
-	for (int i = 0; i < (9 * 9); i++)
-	{
-		memcpy(buf, &dst1[i], sizeof(Ipp16u));
-		binaryFile.write((char*)&buf, sizeof(buf));
-	}
-}
-
 // Returns Normalized 2D kernel
 void GaussKer1D(Ipp32f* KernArr, float rad, int factor)
 {
@@ -106,12 +62,12 @@ void copyBuffer(Ipp16u *src, Ipp16u *dst, int size)
 void dumpKernel(Ipp32f *ker1D, int kernSize)
 {
 	int i = 0;
-	std::cout << "Kernel = [ ";
+	cout << "Kernel = [ ";
 	for (i = 0; i < kernSize; i++)
 	{
-		std::cout << " " << ker1D[i];
+		cout << " " << ker1D[i];
 	}
-	std::cout << "] \n" << "Kernel size : " << i << endl;
+	cout << "] \n" << "Kernel size : " << i << endl;
 }
 
 //Dump image to file
@@ -130,19 +86,12 @@ void dumpImage(Ipp16u *src, int size, string filename, int offset)
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-	int debug = std::stoi(argv[4]);
-
-	// Test Ipp with test matrix
-	if (debug > 1)
-	{
-		testCode();
-		return 0;
-	}
+	int debug = stoi(argv[4]);
 
 	///1.***************************************************************************************************************************************************
 	// Init
 	Ipp32f *ker1D;
-	float rad = std::stof(argv[3]);
+	float rad = stof(argv[3]);
 	int factor = 5;
 	if (rad > 1.4)
 		factor = 3;
@@ -153,8 +102,8 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	IppStatus result;
 
-	int w = std::stoi(argv[1]);
-	int h = std::stoi(argv[2]);
+	int w = stoi(argv[1]);
+	int h = stoi(argv[2]);
 	int size = w * h;
 	int outSize = (w + kernSize - 1)*(h + kernSize - 1);
 
